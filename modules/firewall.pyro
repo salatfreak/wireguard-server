@@ -1,0 +1,111 @@
+(interface: str, from_global: str)
+
+---
+ICMP4 = [
+  "destination-unreachable", "echo-request", "parameter-problem", "time-exceeded",
+]
+ICMP6 = [
+  "destination-unreachable", "echo-request", "nd-neighbor-advert", "nd-neighbor-solicit",
+  "nd-router-advert", "nd-router-solicit", "packet-too-big", "parameter-problem", "time-exceeded",
+]
+BLOCK4 = [
+  "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
+  "192.0.0.0/29", "192.0.0.170/31", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
+  "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "255.255.255.255/32",
+]
+BLOCK6 = [
+  "::/127", "::ffff:0:0/96", "64:ff9b:1::/48", "100::/63", "2001:2::/48", "2001:db8::/32",
+  "3fff::/20", "5f00::/16", "fc00::/7", "fe80::/10",
+]
+
+# retrieve ports from GLOBAL state
+ports = lib.glob.get(from_global, {})
+
+# parse sources specs
+ports = {
+  tuple(reversed(src.split("/", 1) if "/" in src else (src, "tcp"))): dst
+  for src, dst in ports.items()
+}
+---
+
+# set more descriptive alias for interface parameter
+{% set eth = interface %}
+
+# enable and configure nftables firewall
+{% run lib.nftables %}
+  # define allowed ICMP types and blocked address ranges
+  define: { icmp4: `ICMP4`, icmp6: `ICMP6`, block4: `BLOCK4`, block6: `BLOCK6` }
+
+  inet.filter.input:
+    policy: drop
+    rules: 
+      # allow loopback
+      - ["iif lo", "accept"]
+      - ["iif != lo", "ip daddr 127.0.0.1/8", "drop"]
+      - ["iif != lo", "ip6 daddr ::1/128", "drop"]
+
+      # allow established connections
+      - ["ct state invalid", "drop"]
+      - ["ct state { established, related }", "accept"]
+
+      # allow important ICMP messages
+      - ["icmp type $icmp4", "accept"]
+      - ["icmpv6 type $icmp6", "accept"]
+
+      # only allow incoming connections from public interface
+      - [`"iif != " ~ eth`, "drop"]
+
+      # allow DHCP
+      - ["udp sport 67", "udp dport 68", "accept"]
+      - ["udp sport 547", "udp dport 546", "accept"]
+
+      # allow opened and redirected ports
+      {%- for (proto, port), dst in ports.items() if dst != False %}
+      - [`"meta l4proto " ~ proto`, `"ct original proto-dst " ~ port`, "accept"]
+      {%- endfor %}
+
+  inet.filter.output:
+    policy: drop
+    rules:
+      # allow loopback
+      - ["oif lo", "accept"]
+
+      # allow established connections
+      - ["ct state invalid", "drop"]
+      - ["ct state { established, related }", "accept"]
+
+      # allow outgoing connections to public interface
+      - [`"oif " ~ eth`, "accept"]
+
+      # allow pinging VPN clients
+      - ["oif wg0", "icmp type echo-request", "accept"]
+      - ["oif wg0", "icmpv6 type echo-request", "accept"]
+
+      # include runtime generated output rules
+      - include "/etc/nftables/output.d/*.conf"
+
+  inet.filter.forward:
+    policy: drop
+    rules:
+      # allow established connections
+      - ["ct state invalid", "drop"]
+      - ["ct state { established, related }", "accept"]
+
+      # deny traffic to blocked ranges
+      - ["ct original ip daddr $block4", "drop"]
+      - ["ip6 daddr $block6", "drop"]
+
+      # deny traffic from blocked ranges to VPN clients
+      - ["ip saddr $block4", "oif wg0", "drop"]
+      - ["ip6 saddr $block6", "oif wg0", "drop"]
+
+      # allow outgoing connections from all VPN clients
+      - ["iif wg0", `"oif " ~ eth`, "accept"]
+
+      # include runtime generated forward rules
+      - include "/etc/nftables/forward.d/*.conf"
+
+  # set up network address translation
+  inet.nat.prerouting.rules[0]: include "/etc/nftables/prerouting.d/*.conf"
+  inet.nat.postrouting.rules[0]: ["meta nfproto ipv4", "iif wg0", `"oif " ~ eth`, "masquerade"]
+{% endrun %}

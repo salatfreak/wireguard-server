@@ -1,0 +1,75 @@
+(port: int, interface: str, ipv4: str, ipv6: str)
+
+---
+
+PERSIST = "/mnt/persist/vpn-proxy"
+NEIGHBOUR = "/run/NetworkManager/wireguard-neighbours.list"
+HOOK_NAME = "90-wireguard-neighbour-entries"
+SERVICE_NAME = "vpn-config"
+
+# open port for WireGuard to listen on
+lib.glob.add(f"firewall.ports.{port}/udp", True)
+
+# generate paths and script contents
+hook_path = f"/etc/NetworkManager/dispatcher.d/{HOOK_NAME}"
+hook_cont = std.load(_/f"{HOOK_NAME}.jinja", eth=interface, neighbour=NEIGHBOUR)
+
+script_path = f"/usr/local/libexec/{SERVICE_NAME}.sh"
+params = dict(ipv4=ipv4, ipv6=ipv6, port=port, eth=interface, persist=PERSIST, neighbour=NEIGHBOUR)
+script_cont = std.load(_/f"{SERVICE_NAME}.jinja.sh", **params)
+---
+
+systemd.units:
+  # create wg0 interface before starting nftables
+  - name: nftables.service
+    dropins[0]:
+      name: create-wireguard-interface.conf
+      contents: {% run lib.unit.contents %}
+        service.exec_start_pre: -ip link add wg0 type wireguard
+      {% endrun %}
+
+  # add VPN config service
+  - name: `SERVICE_NAME ~ ".service"`
+    enabled: true
+    contents: {% run lib.unit.contents %}
+      unit:
+        description: VPN and forwarding config
+        default_dependencies: false
+        after: local-fs.target
+        before: ["nftables.service", "NetworkManager.service"]
+      service:
+        type: oneshot
+        remain_after_exit: true
+        exec_start: `"/usr/bin/bash " ~ script_path`
+        exec_reload: `"/usr/bin/bash %s --reload" % script_path`
+      install:
+        wanted_by: multi-user.target
+    {% endrun %}
+
+# create key persistence directory
+storage.directories[0].path: `PERSIST ~ "/peers"`
+
+# create link to persistent directory in core user home
+storage.links[0]: `std.link("vpn-proxy", PERSIST, user="core")`
+
+storage.files:
+  # configure kernel IP settings
+  - {% run lib.conf.sysctl "allow-forwarding" %}
+    # enable forwarding
+    net.ipv4.ip_forward: true
+    net.ipv6.conf.all.forwarding: true
+
+    # enable neighbour discovery on public interface
+    net.ipv6.conf.`interface | raw`.proxy_ndp: 1
+  {% endrun %}
+
+  # let NetworkManager manage existing devices
+  - {% run lib.conf.nm_conf "manage-devices" %}
+    device.managed: true
+  {% endrun %}
+
+  # add neighbour entry NetworkManager hook
+  - `std.file(hook_path, hook_cont, mode=0o744)`
+
+  # add service script
+  - `std.file(script_path, script_cont)`

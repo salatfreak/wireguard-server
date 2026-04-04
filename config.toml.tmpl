@@ -1,0 +1,29 @@
+# partition size for root file system and optional swap
+[storage]
+root_size = 16384
+swap_size = 2048
+
+# public interface to forward traffic from
+[network]
+interface = "ens3"
+
+# local IPv4 address and subnet on wireguard interface
+[network.ipv4]
+local = "10.0.0.1/24"
+
+# manually specified public IPv6 address and gateway
+[network.ipv6]
+address = "<IPV6 ADDRESS AND MASK>"
+gateway = "<IPV6 GATEWAY>"
+
+# local IPv6 address and subnet on wireguard interface
+local = "fe80:0:0:10::1/112"
+
+# custom SSH port to listen on and admin pubkey
+[ssh]
+port = <RANDOM SSH PORT>
+pubkey = "<SSH PUBLIC KEY FOR ADMINISTRATION>"
+
+# UDP port for WireGuard to listen on
+[wireguard]
+port = <RANDOM WIREGUARD PORT>

@@ -1,0 +1,6 @@
+# custom config file
+/config.toml
+
+# Ignition and ISO outputs
+*.ign
+*.iso

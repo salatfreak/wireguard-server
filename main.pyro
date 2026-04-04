@@ -1,0 +1,44 @@
+---
+# load config file
+cfg = std.magic(std.load.toml("config.toml"))
+---
+
+# configure and run modules
+ignition.config.merge: {% run lib.modules _.modules %}
+  # storage layout
+  lib.storage:
+    root: { size: `cfg.storage.root_size`, resize: true, wipe: true }
+    {%- if (cfg.storage.swap_size or 0) > 0 %}
+    swap: { size: `cfg.storage.swap_size`, format: "swap" }
+    {%- endif %}
+    persist: {}
+
+  # harden security
+  security: []
+
+  # static IPv6 configuration
+  network:
+    interface: `cfg.network.interface`
+    ipv6: `cfg.network.ipv6.address`
+    gwv6: `cfg.network.ipv6.gateway`
+
+  # custom SSHD port, persistent keys, and public keys only editable by root
+  sshd:
+    port: `cfg.ssh.port`
+    pubkey: `cfg.ssh.pubkey`
+
+  # quick reprovisioning without reinstallation
+  lib.quick_reprovision: []
+
+  # wireguard VPN setup
+  wireguard:
+    port: `cfg.wireguard.port`
+    interface: `cfg.network.interface`
+    ipv4: `cfg.network.ipv4.local`
+    ipv6: `cfg.network.ipv6.local`
+
+  # open and redirect ports
+  firewall:
+    interface: `cfg.network.interface`
+    from_global: firewall.ports
+{% endrun %}

@@ -1,0 +1,12 @@
+(interface: str, ipv6: str, gwv6: str)
+
+# configure static IPv6 address and gateway
+{% run lib.conf.nm_conn interface %}
+  connection:
+    type: ethernet
+    interface_name: `interface`
+
+  ipv6:
+    method: manual
+    address1: `"%s,%s" % (ipv6, gwv6)`
+{% endrun %}

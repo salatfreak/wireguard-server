@@ -1,0 +1,32 @@
+# add sysctl and SSHD config files
+storage.files:
+  - {% run lib.conf.sysctl "99-security" %}
+    # hide kernel pointers
+    kernel.kptr_restrict: 2
+
+    # disable altering routing tables through ICMP redirects
+    net.ipv4.conf.all.accept_redirects: 0
+    net.ipv6.conf.all.accept_redirects: 0
+    net.ipv4.conf.all.send_redirects: 0
+  {% endrun %}
+
+  - {% run lib.conf.sshd "20-security" %}
+    # restrict logins
+    authentication_methods: publickey
+    permit_root_login: false
+    g_s_s_a_p_i_authentication: false
+
+    # restrict features
+    subsystem: sftp none
+    disable_forwarding: true
+    permit_listen: none
+    permit_open: none
+    permit_user_r_c: false
+  {% endrun %}
+
+# mask docker service and socket
+systemd.units:
+  {%- for kind in ['service', 'socket'] %}
+  - name: `"docker." ~ kind`
+    mask: true
+  {%- endfor %}

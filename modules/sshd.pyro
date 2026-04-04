@@ -1,0 +1,19 @@
+(port: int, pubkey: str)
+---
+
+# open port for SSHD to listen on
+lib.glob.add(f"firewall.ports.{port}", True)
+
+std.merge(
+  # add SELinux rule to allow listening on custom port
+  lib.selinux('ssh-port', [f"(portcon tcp {port} (system_u object_r ssh_port_t ((s0) (s0))))"]),
+
+  # store SSHD keys on persistent partition
+  lib.persist_sshd_keys("/var/mnt/persist/ssh"),
+
+  # install authorized keys only editable by root
+  lib.authorized_keys(core=pubkey),
+
+  # changing listening port
+  lib.conf.sshd("20-port", port=port)
+)
