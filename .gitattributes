@@ -1,1 +1,2 @@
 *.pyro linguist-language=Python
+*.toml.tmpl linguist-language=TOML
