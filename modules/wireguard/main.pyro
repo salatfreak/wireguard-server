@@ -20,14 +20,6 @@ script_cont = std.load(_/f"{SERVICE_NAME}.jinja.sh", **params)
 ---
 
 systemd.units:
-  # create wg0 interface before starting nftables
-  - name: nftables.service
-    dropins[0]:
-      name: create-wireguard-interface.conf
-      contents: {% run lib.unit.contents %}
-        service.exec_start_pre: -ip link add wg0 type wireguard
-      {% endrun %}
-
   # add VPN config service
   - name: `SERVICE_NAME ~ ".service"`
     enabled: true
@@ -61,11 +53,6 @@ storage.files:
 
     # enable neighbour discovery on public interface
     net.ipv6.conf.`interface | raw`.proxy_ndp: 1
-  {% endrun %}
-
-  # let NetworkManager manage existing devices
-  - {% run lib.conf.nm_conf "manage-devices" %}
-    device.managed: true
   {% endrun %}
 
   # add neighbour entry NetworkManager hook

@@ -78,8 +78,8 @@ ports = {
       - [`"oif " ~ eth`, "accept"]
 
       # allow pinging VPN clients
-      - ["oif wg0", "icmp type echo-request", "accept"]
-      - ["oif wg0", "icmpv6 type echo-request", "accept"]
+      - ["oifname wg0", "icmp type echo-request", "accept"]
+      - ["oifname wg0", "icmpv6 type echo-request", "accept"]
 
       # include runtime generated output rules
       - include "/etc/nftables/output.d/*.conf"
@@ -96,16 +96,16 @@ ports = {
       - ["ip6 daddr $block6", "drop"]
 
       # deny traffic from blocked ranges to VPN clients
-      - ["ip saddr $block4", "oif wg0", "drop"]
-      - ["ip6 saddr $block6", "oif wg0", "drop"]
+      - ["ip saddr $block4", "oifname wg0", "drop"]
+      - ["ip6 saddr $block6", "oifname wg0", "drop"]
 
       # allow outgoing connections from all VPN clients
-      - ["iif wg0", `"oif " ~ eth`, "accept"]
+      - ["iifname wg0", `"oif " ~ eth`, "accept"]
 
       # include runtime generated forward rules
       - include "/etc/nftables/forward.d/*.conf"
 
   # set up network address translation
   inet.nat.prerouting.rules[0]: include "/etc/nftables/prerouting.d/*.conf"
-  inet.nat.postrouting.rules[0]: ["meta nfproto ipv4", "iif wg0", `"oif " ~ eth`, "masquerade"]
+  inet.nat.postrouting.rules[0]: ["meta nfproto ipv4", "iifname wg0", `"oif " ~ eth`, "masquerade"]
 {% endrun %}

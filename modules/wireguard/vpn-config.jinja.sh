@@ -60,13 +60,13 @@ for peer in "$PEERS_PATH"/*.json; do
   # add firewall rules
   for port in $ports_v4; do
     if [[ "$port" == */* ]]; then proto="${port#*/}"; port="${port%%/*}"; else proto='tcp'; fi
-    forward_conf+="iif ${ETH} oif wg0 ip daddr ${ipv4} ${proto} dport ${port} accept${LF}"
+    forward_conf+="iif ${ETH} oifname wg0 ip daddr ${ipv4} ${proto} dport ${port} accept${LF}"
     prerouting_conf+="iif ${ETH} meta nfproto ipv4 ${proto} dport ${port} dnat to ${ipv4}${LF}"
   done
 
   for port in $ports_v6; do
     if [[ "$port" == */* ]]; then proto="${port#*/}"; port="${port%%/*}"; else proto='tcp'; fi
-    forward_conf+="iif ${ETH} oif wg0 ip6 daddr ${ipv6} ${proto} dport ${port} accept${LF}"
+    forward_conf+="iif ${ETH} oifname wg0 ip6 daddr ${ipv6} ${proto} dport ${port} accept${LF}"
   done
 
   # add ipv6 for neighbour entry hook
